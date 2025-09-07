@@ -21,7 +21,7 @@ setup(
     author_email="raj.katuwal2061@gmail.com",
     url="https://github.com/Rajendra-Katuwal/django-bsdatetime",
     project_urls={
-        "Documentation": "https://Rajendra-Katuwal.github.io/django-bsdatetime/",
+        "Documentation": "https://Rajendra-Katuwal.github.io/bsdatetime.docs/",
         "Source": "https://github.com/Rajendra-Katuwal/django-bsdatetime",
         "Issues": "https://github.com/Rajendra-Katuwal/django-bsdatetime/issues",
     },
