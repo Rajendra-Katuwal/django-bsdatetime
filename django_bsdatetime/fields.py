@@ -10,25 +10,21 @@ from typing import Any
 from django.db import models
 from django.core.exceptions import ValidationError
 
-try:  # Prefer new name
-    import bsdatetime as bs  # type: ignore
-except ImportError:
-    try:
-        import bikram_sambat as bs  # type: ignore
-    except ImportError as e:  # pragma: no cover
-        raise ImportError(
-            "django-bikram-sambat requires 'bsdatetime'. Install with: pip install bsdatetime"
-        ) from e
+try:
+    import bsdatetime as bs
+
+except ImportError as e:
+    raise ImportError(
+        "django-bikram-sambat requires 'bsdatetime'. Install with: pip install bsdatetime"
+    ) from e
+
 
 __all__ = [
-    "BikramSambatDateField",
-    "BikramSambatDateTimeField", 
-    # Aliases for backward compatibility
     "BSDateField",
-    "NepaliDateField",
+    "BSDateTimeField",
 ]
 
-class BikramSambatDateField(models.DateField):
+class BSDateField(models.DateField):
     """DateField that accepts and returns BS date tuples (year, month, day).
 
     Internally stored as a standard AD date in the database for portability.
@@ -66,10 +62,10 @@ class BikramSambatDateField(models.DateField):
                     raise ValueError("BS date tuple components must be integers")
                 return bs.bs_to_ad(y, m, d)
             except (ValueError, TypeError) as e:
-                raise TypeError(f"Unsupported value for BikramSambatDateField: {e}")
+                raise TypeError(f"Unsupported value for BSDateField: {e}")
         if isinstance(value, _dt.date) and not isinstance(value, _dt.datetime):
             return value
-        raise TypeError("Unsupported value for BikramSambatDateField")
+        raise TypeError("Unsupported value for BSDateField")
 
     def value_to_string(self, obj):  # type: ignore[override]
         value = self.value_from_object(obj)
@@ -82,7 +78,7 @@ class BikramSambatDateField(models.DateField):
         return ""
 
 
-class BikramSambatDateTimeField(models.DateTimeField):
+class BSDateTimeField(models.DateTimeField):
     """DateTimeField for BS calendar with tuple interface.
 
     Accepts (y,m,d,h,M,s) or (y,m,d) tuples and stores a naive datetime in AD.
@@ -129,10 +125,10 @@ class BikramSambatDateTimeField(models.DateTimeField):
                 ad_date = bs.bs_to_ad(y, m, d)
                 return _dt.datetime(ad_date.year, ad_date.month, ad_date.day, h, M, s)
             except (ValueError, TypeError) as e:
-                raise TypeError(f"Unsupported value for BikramSambatDateTimeField: {e}")
+                raise TypeError(f"Unsupported value for BSDateTimeField: {e}")
         if isinstance(value, _dt.datetime):
             return value
-        raise TypeError("Unsupported value for BikramSambatDateTimeField")
+        raise TypeError("Unsupported value for BSDateTimeField")
 
     def value_to_string(self, obj):  # type: ignore[override]
         value = self.value_from_object(obj)
@@ -148,7 +144,3 @@ class BikramSambatDateTimeField(models.DateTimeField):
             return f"{y:04d}-{m:02d}-{d:02d} {value.hour:02d}:{value.minute:02d}:{value.second:02d}"
         return ""
 
-
-# Aliases for backward compatibility and convenience
-BSDateField = BikramSambatDateField
-NepaliDateField = BikramSambatDateField
