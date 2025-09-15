@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-bsdatetime"
-version = "1.0.0"
+version = "1.0.1"
 description = "Django model fields for Bikram Sambat (Nepali) dates (built on bsdatetime)"
 readme = "README.md"
 authors = [ { name = "Rajendra Katuwal", email = "raj.katuwal2061@gmail.com" } ]
@@ -25,7 +25,6 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Development Status :: 5 - Production/Stable",
   "Environment :: Web Environment",
@@ -34,7 +33,7 @@ classifiers = [
 ]
 dependencies = [
   "Django>=3.2",
-  "bsdatetime>=1.0.0",
+  "bsdatetime>=1.0.1",
 ]
 
 [project.urls]

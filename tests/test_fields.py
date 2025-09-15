@@ -1,5 +1,5 @@
 import unittest
-from django_bsdatetime import BSDateField
+from django_bsdatetime.fields import BSDateField
 
 class TestDjangoBikramSambat(unittest.TestCase):
     def test_field_description(self):
