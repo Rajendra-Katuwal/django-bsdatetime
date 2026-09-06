@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-bsdatetime"
-version = "1.0.1"
+version = "1.2.1"
 description = "Django model fields for Bikram Sambat (Nepali) dates (built on bsdatetime)"
 readme = "README.md"
 authors = [ { name = "Rajendra Katuwal", email = "raj.katuwal2061@gmail.com" } ]

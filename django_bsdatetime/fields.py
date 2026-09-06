@@ -17,7 +17,7 @@ try:
     import bsdatetime as bs
 except ImportError as e:
     raise ImportError(
-        "django-bikram-sambat requires 'bsdatetime'. "
+        "django-bsdatetime requires 'bsdatetime'. "
         "Install with: pip install bsdatetime"
     ) from e
 
@@ -26,6 +26,9 @@ __all__ = [
     "BSDateField",
     "BSDateTimeField",
 ]
+
+_DATE_STRING_FMT = "%Y-%m-%d"
+_DATETIME_STRING_FMT = "%Y-%m-%d %H:%M:%S"
 
 
 class BSDateField(models.DateField):
@@ -49,6 +52,15 @@ class BSDateField(models.DateField):
                 raise ValidationError(f"Invalid BS date tuple: {e}")
         if isinstance(value, _dt.date) and not isinstance(value, _dt.datetime):
             return value
+        if isinstance(value, str):
+            # Strings round-trip through value_to_string() in BS "%Y-%m-%d"
+            # form, so they must be parsed as BS dates here too - not as
+            # AD dates via the base DateField parser.
+            try:
+                y, m, d = bs.parse_bs_date(value, _DATE_STRING_FMT)
+                return bs.bs_to_ad(y, m, d)
+            except ValueError as e:
+                raise ValidationError(f"Invalid BS date string: {e}")
         return super().to_python(value)
 
     def from_db_value(self, value, expression, connection):  # type: ignore[override]
@@ -67,7 +79,26 @@ class BSDateField(models.DateField):
                 raise TypeError(f"Unsupported value for BSDateField: {e}")
         if isinstance(value, _dt.date) and not isinstance(value, _dt.datetime):
             return value
+        if isinstance(value, str):
+            # Mirrors to_python()'s string handling, so a raw string passed
+            # straight to a query filter or save() (bypassing to_python) is
+            # parsed as a BS date too, not rejected.
+            try:
+                y, m, d = bs.parse_bs_date(value, _DATE_STRING_FMT)
+                return bs.bs_to_ad(y, m, d)
+            except ValueError as e:
+                raise TypeError(f"Invalid BS date string: {e}")
         raise TypeError("Unsupported value for BSDateField")
+
+    def pre_save(self, model_instance, add):  # type: ignore[override]
+        if self.auto_now or (self.auto_now_add and add):
+            ad_value = _dt.date.today()
+            # Keep the in-memory attribute consistent with what a fresh
+            # from_db_value() read would return (a BS tuple), even though
+            # the value actually persisted is the AD date below.
+            setattr(model_instance, self.attname, bs.ad_to_bs(ad_value))
+            return ad_value
+        return super().pre_save(model_instance, add)
 
     def value_to_string(self, obj):  # type: ignore[override]
         value = self.value_from_object(obj)
@@ -90,42 +121,59 @@ class BSDateTimeField(models.DateTimeField):
     description = "Bikram Sambat datetime"
 
     def __init__(self, *args, auto_now: bool = False, auto_now_add: bool = False, **kwargs):
-        self.auto_now = auto_now
-        self.auto_now_add = auto_now_add
         if auto_now or auto_now_add:
             kwargs.pop("default", None)
             kwargs.setdefault("editable", False)
             kwargs.setdefault("blank", True)
-        super().__init__(*args, **kwargs)
+        # auto_now/auto_now_add must be forwarded to DateTimeField.__init__ -
+        # it sets self.auto_now/self.auto_now_add itself, and would silently
+        # reset them back to False if they were only set here beforehand.
+        super().__init__(*args, auto_now=auto_now, auto_now_add=auto_now_add, **kwargs)
+
+    def _bs_tuple_to_ad_datetime(self, value: tuple) -> _dt.datetime:
+        if len(value) == 6:
+            y, m, d, h, M, s = value
+        else:
+            y, m, d = value
+            h = M = s = 0
+        ad_date = bs.bs_to_ad(y, m, d)
+        dt = _dt.datetime(ad_date.year, ad_date.month, ad_date.day, h, M, s)
+        if settings.USE_TZ:
+            from django.utils import timezone
+            dt = timezone.make_aware(dt, timezone.get_default_timezone())
+        return dt
 
     def to_python(self, value: Any):  # type: ignore[override]
         if value in (None, ""):
             return None
         if isinstance(value, tuple) and (len(value) in (3, 6)):
             try:
-                if len(value) == 6:
-                    y, m, d, h, M, s = value
-                else:
-                    y, m, d = value
-                    h = M = s = 0
-                ad_date = bs.bs_to_ad(y, m, d)
-                dt = _dt.datetime(ad_date.year, ad_date.month, ad_date.day, h, M, s)
-                if settings.USE_TZ:
-                    from django.utils import timezone
-                    dt = timezone.make_aware(dt, timezone.get_default_timezone())
-                return dt
+                return self._bs_tuple_to_ad_datetime(value)
             except Exception as e:
                 raise ValidationError(f"Invalid BS datetime tuple: {e}")
         if isinstance(value, _dt.datetime):
             return value
+        if isinstance(value, str):
+            # Strings round-trip through value_to_string() in BS
+            # "%Y-%m-%d %H:%M:%S" form, so they must be parsed as BS
+            # datetimes here too - not as AD datetimes via the base parser.
+            try:
+                y, m, d, h, M, s = bs.parse_bs_datetime(value, _DATETIME_STRING_FMT)
+                return self._bs_tuple_to_ad_datetime((y, m, d, h, M, s))
+            except ValueError as e:
+                raise ValidationError(f"Invalid BS datetime string: {e}")
         return super().to_python(value)
 
     def pre_save(self, model_instance, add):  # type: ignore[override]
         from django.utils import timezone
         if self.auto_now or (self.auto_now_add and add):
-            value = timezone.now() if settings.USE_TZ else _dt.datetime.now()
-            setattr(model_instance, self.attname, value)
-            return value
+            ad_value = timezone.now() if settings.USE_TZ else _dt.datetime.now()
+            # Keep the in-memory attribute consistent with what a fresh
+            # from_db_value() read would return (a BS tuple), even though
+            # the value actually persisted is the AD datetime below.
+            y, m, d = bs.ad_to_bs(ad_value.date())
+            setattr(model_instance, self.attname, (y, m, d, ad_value.hour, ad_value.minute, ad_value.second))
+            return ad_value
         return super().pre_save(model_instance, add)
 
     def deconstruct(self):
@@ -149,21 +197,20 @@ class BSDateTimeField(models.DateTimeField):
             return None
         if isinstance(value, tuple) and (len(value) in (3, 6)):
             try:
-                if len(value) == 6:
-                    y, m, d, h, M, s = value
-                else:
-                    y, m, d = value
-                    h = M = s = 0
-                ad_date = bs.bs_to_ad(y, m, d)
-                dt = _dt.datetime(ad_date.year, ad_date.month, ad_date.day, h, M, s)
-                if settings.USE_TZ:
-                    from django.utils import timezone
-                    dt = timezone.make_aware(dt, timezone.get_default_timezone())
-                return dt
+                return self._bs_tuple_to_ad_datetime(value)
             except Exception as e:
                 raise TypeError(f"Unsupported value for BSDateTimeField: {e}")
         if isinstance(value, _dt.datetime):
             return value
+        if isinstance(value, str):
+            # Mirrors to_python()'s string handling, so a raw string passed
+            # straight to a query filter or save() (bypassing to_python) is
+            # parsed as a BS datetime too, not rejected.
+            try:
+                y, m, d, h, M, s = bs.parse_bs_datetime(value, _DATETIME_STRING_FMT)
+                return self._bs_tuple_to_ad_datetime((y, m, d, h, M, s))
+            except ValueError as e:
+                raise TypeError(f"Invalid BS datetime string: {e}")
         raise TypeError("Unsupported value for BSDateTimeField")
 
     def value_to_string(self, obj):  # type: ignore[override]
